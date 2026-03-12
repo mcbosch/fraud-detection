@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+#====== IMPORTANT ===========
+# Downloaded data in local
+data/raw
+
+# Kaggle Credentials
+.kaggle/
+
+# IDE
+.vscode/
+.idea/
