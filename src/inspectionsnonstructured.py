@@ -37,6 +37,7 @@ class SummaryStatsStrategy(EDAStrategy):
         print(df.dtypes)
         print("\n= Descriptive statistics\t" + "=" * 20)
         print(df.describe())
+        
 
 
 class MissingValuesStrategy(EDAStrategy):
@@ -131,7 +132,7 @@ class CorrelationStrategy(EDAStrategy):
 
         plt.figure(figsize=(10, 8))
         sns.heatmap(corr, annot=False, cmap='coolwarm', center=0,
-                    linewidths=0.5, square=True)
+                    linewidths=0.5, square=True, vmax=1, vmin=-1)
         plt.title('Correlation matrix')
         plt.tight_layout()
         plt.show()
@@ -160,14 +161,15 @@ if __name__ == '__main__':
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
     from data.dataloader import DataLoaderFactory
 
-    df = DataLoaderFactory.create('zip').load_data('data/raw/creditcard.csv.zip')
+    # df = DataLoaderFactory.create('zip').load_data('data/raw/creditcard.csv.zip')
 
-    inspector = DataInspector(SummaryStatsStrategy())
+    # inspector = DataInspector(SummaryStatsStrategy())
 
-    inspector.run_all(df, [
-        SummaryStatsStrategy(),
-        MissingValuesStrategy(),
-        ClassImbalanceStrategy(target_col='Class'),
-        FeatureDistributionStrategy(target_col='Class'),
-        CorrelationStrategy(target_col='Class'),
-    ])
+    # inspector.run_all(df, [
+    #     SummaryStatsStrategy(),
+    #     MissingValuesStrategy(),
+    #     ClassImbalanceStrategy(target_col='Class'),
+    #     FeatureDistributionStrategy(target_col='Class'),
+    #     CorrelationStrategy(target_col='Class'),
+    # ])
+    pass

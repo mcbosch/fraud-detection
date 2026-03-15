@@ -1,8 +1,10 @@
 # Fraud Detection Project
 
-This repository is an end-to-end project focused on building and evaluating fraud detection models using the Amazon Science Fraud Dataset Benchmark.
+This repository is an end-to-end project focused on building and evaluating fraud detection models using the Amazon Science Fraud Dataset Benchmark. 
 
 The aim is to start with basic machine learning models and progressively move towards more advanced techniques such as Topological Data Analysis (TDA) and Graph Neural Networks (GNNs).
+
+For the starting process I am following the notes of the [fraud-detection-handbook](https://fraud-detection-handbook.github.io/fraud-detection-handbook/Chapter_2_Background/Introduction.html). Since I am a mathematician, I am comfortable with ML and mathematic concepts, but in fraud detection is important to have some background to design good features, and analyze the data. 
 
 ## Repository Structure
 
