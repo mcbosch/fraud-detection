@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from data.graphstructure import GraphFraudData
+from src.data.graphstructure import GraphFraudData
 
 import os
 import zipfile

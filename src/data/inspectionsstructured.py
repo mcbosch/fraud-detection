@@ -8,7 +8,7 @@ import seaborn as sns
 import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from data.graphstructure import GraphFraudData
+from src.data.graphstructure import GraphFraudData
 
 r"""
 EDA methods for graph-structured fraud data following a Strategy Design Pattern.
@@ -129,8 +129,6 @@ class ClassDistributionStrategy(GraphEDAStrategy):
         plt.show()
 
 
-# ======== Intermediate Strategies =====================
-
 class DegreeDistributionStrategy(GraphEDAStrategy):
     """
     Computes in-degree, out-degree, and total degree for each node
@@ -163,53 +161,6 @@ class DegreeDistributionStrategy(GraphEDAStrategy):
         plt.show()
 
 
-class NodeFeaturesByClassStrategy(GraphEDAStrategy):
-    """
-    Plots KDE distributions of the top-N node features, split by class label.
-    Requires node_features to share the same node-ID index as data.classes.
-    """
-
-    def __init__(self, top_n: int = 9):
-        self.top_n = top_n
-
-    def analyze(self, data: GraphFraudData) -> None:
-        id_col   = data.classes.columns[0]
-        cls_col  = data.classes.columns[1]
-
-        # Attach class labels to node features by positional alignment
-        df = data.node_features.copy().reset_index(drop=True)
-        cls = data.classes[[id_col, cls_col]].reset_index(drop=True)
-        df['__class__'] = cls[cls_col].values
-
-        # Drop unknown / unlabeled nodes if class is stored as string 'unknown'
-        df = df[df['__class__'].astype(str) != 'unknown']
-
-        numeric_cols = [c for c in df.select_dtypes(include='number').columns
-                        if c != '__class__'][:self.top_n]
-
-        n = len(numeric_cols)
-        ncols = 3
-        nrows = (n + ncols - 1) // ncols
-
-        _, axes = plt.subplots(nrows, ncols, figsize=(ncols * 5, nrows * 3))
-        axes = axes.flatten()
-        palette = sns.color_palette("Set2", df['__class__'].nunique())
-
-        for i, col in enumerate(numeric_cols):
-            for j, (label, grp) in enumerate(df.groupby('__class__')):
-                axes[i].hist(grp[col].dropna(), bins=40, alpha=0.5,
-                             label=str(label), color=palette[j], density=True)
-            axes[i].set_title(f'Feature {col}', fontsize=9)
-            axes[i].legend(fontsize=7)
-
-        for k in range(i + 1, len(axes)):
-            axes[k].set_visible(False)
-
-        plt.suptitle('Node feature distributions by class', y=1.01)
-        plt.tight_layout()
-        plt.show()
-
-
 # ======== Advanced Strategies =====================
 
 class ConnectedComponentsStrategy(GraphEDAStrategy):
@@ -217,6 +168,13 @@ class ConnectedComponentsStrategy(GraphEDAStrategy):
     Analyses connected components of the (undirected) graph:
     number of components, size distribution, and fraction of nodes
     in the largest component.
+
+    NOTE: This strategy is a general strategy, is not focused on 
+    the Elliptic Data Set where we have previous knowledge on connected 
+    components. 
+
+    This Strategy is not recomended for the Elliptic Data Set.
+    For Elliptic Data Set see: SubGraphGroupBy
     """
 
     def analyze(self, data: GraphFraudData) -> None:
@@ -232,163 +190,23 @@ class ConnectedComponentsStrategy(GraphEDAStrategy):
         print(f"\n  Size stats:")
         print(pd.Series(sizes, name='component_size').describe().round(2))
 
-        # Plot: component size distribution (excluding the giant component for readability)
+        # Plot: size of each componsent
         tail_sizes = sizes[1:] if len(sizes) > 1 else sizes
         plt.figure(figsize=(8, 4))
-        plt.hist(tail_sizes, bins=40, color='steelblue', edgecolor='white', log=True)
-        plt.title('Component size distribution (excl. giant component)')
-        plt.xlabel('Component size')
-        plt.ylabel('Count (log)')
+        plt.bar(range(len(components)), sizes, color='steelblue')
+        plt.title('Component Size')
+        plt.xlabel('Component')
+        plt.ylabel('Count')
         plt.tight_layout()
         plt.show()
 
 
-class HomophilyStrategy(GraphEDAStrategy):
-    """
-    Computes edge homophily: the fraction of edges that connect two nodes
-    of the same class.  High homophily means fraud nodes tend to connect
-    to other fraud nodes.
-
-    H = |{(u,v) ∈ E : class(u) == class(v)}| / |labeled edges|
-    """
+class SubGraphGroupBy(GraphEDAStrategy):
+    def __init__(self, var: str) -> None:
+        self.by = var
 
     def analyze(self, data: GraphFraudData) -> None:
-        cmap = _class_map(data)
-        edge_cols = data.edges.columns.tolist()
-        src_col, dst_col = edge_cols[0], edge_cols[1]
-
-        total, same_class = 0, 0
-        class_pair_counts: dict[tuple, int] = {}
-
-        for _, row in data.edges.iterrows():
-            u, v = row[src_col], row[dst_col]
-            cu, cv = cmap.get(u), cmap.get(v)
-            if cu is None or cv is None:
-                continue
-            total += 1
-            if cu == cv:
-                same_class += 1
-            pair = tuple(sorted([str(cu), str(cv)]))
-            class_pair_counts[pair] = class_pair_counts.get(pair, 0) + 1
-
-        homophily = same_class / total if total else float('nan')
-
-        print("= Edge Homophily\t" + "=" * 40)
-        print(f"  Labeled edges   : {total:,}")
-        print(f"  Same-class edges: {same_class:,}")
-        print(f"  Homophily index : {homophily:.4f}")
-        print("\n  Edge class-pair counts:")
-        for pair, cnt in sorted(class_pair_counts.items(), key=lambda x: -x[1]):
-            print(f"    {pair[0]} -- {pair[1]}: {cnt:,}  ({cnt/total*100:.1f}%)")
-
-        # Bar chart of class-pair frequencies
-        labels = [f"{p[0]}–{p[1]}" for p in sorted(class_pair_counts)]
-        values = [class_pair_counts[p] for p in sorted(class_pair_counts)]
-        plt.figure(figsize=(7, 4))
-        plt.bar(labels, values, color=sns.color_palette("Set2", len(labels)))
-        plt.title(f'Edge class-pair distribution  (homophily = {homophily:.3f})')
-        plt.ylabel('Edge count')
-        plt.tight_layout()
-        plt.show()
-
-
-class HubNodesStrategy(GraphEDAStrategy):
-    """
-    Identifies the top-k highest-degree nodes and shows their class breakdown.
-    Useful for spotting whether hubs are disproportionately fraudulent.
-    """
-
-    def __init__(self, top_k: int = 20):
-        self.top_k = top_k
-
-    def analyze(self, data: GraphFraudData) -> None:
-        G = _build_graph(data, directed=True)
-        cmap = _class_map(data)
-        cls_col = data.classes.columns[1]
-
-        degree_df = pd.DataFrame({
-            'node': list(G.nodes()),
-            'in_degree':  [G.in_degree(n)  for n in G.nodes()],
-            'out_degree': [G.out_degree(n) for n in G.nodes()],
-        })
-        degree_df['total_degree'] = degree_df['in_degree'] + degree_df['out_degree']
-        degree_df[cls_col] = degree_df['node'].map(cmap)
-        top = degree_df.nlargest(self.top_k, 'total_degree').reset_index(drop=True)
-
-        print(f"= Top-{self.top_k} Hub Nodes\t" + "=" * 40)
-        print(top.to_string(index=False))
-
-        # Class breakdown among hubs
-        hub_class_counts = top[cls_col].value_counts()
-        print(f"\n  Class breakdown among top-{self.top_k} hubs:")
-        print(hub_class_counts.to_string())
-
-        fig, axes = plt.subplots(1, 2, figsize=(14, 4))
-        colors = sns.color_palette("Set2", len(hub_class_counts))
-
-        top.set_index('node')[['in_degree', 'out_degree']].plot(
-            kind='bar', stacked=True, ax=axes[0], color=['steelblue', 'tomato'])
-        axes[0].set_title(f'Top-{self.top_k} hubs: in vs out degree')
-        axes[0].set_xlabel('Node ID')
-        axes[0].tick_params(axis='x', rotation=45)
-
-        hub_class_counts.plot(kind='bar', ax=axes[1], color=colors)
-        axes[1].set_title(f'Class distribution in top-{self.top_k} hubs')
-        axes[1].set_ylabel('Count')
-        axes[1].tick_params(axis='x', rotation=0)
-
-        plt.tight_layout()
-        plt.show()
-
-
-class TemporalPatternStrategy(GraphEDAStrategy):
-    """
-    Plots class distribution over time steps, assuming the first
-    node-feature column (time_col index) encodes a discrete time step.
-
-    Useful for datasets like Elliptic where feature column 0 is the
-    time step (1–49).
-    """
-
-    def __init__(self, time_col: int = 0):
-        self.time_col = time_col
-
-    def analyze(self, data: GraphFraudData) -> None:
-        cls_col = data.classes.columns[1]
-        id_col  = data.classes.columns[0]
-
-        # Align node features with class labels by position
-        df = data.node_features.copy().reset_index(drop=True)
-        time_series = df.iloc[:, self.time_col].rename('time_step')
-        cls = data.classes[[id_col, cls_col]].reset_index(drop=True)
-
-        merged = pd.DataFrame({
-            'time_step': time_series,
-            cls_col: cls[cls_col].values,
-        })
-        merged = merged[merged[cls_col].astype(str) != 'unknown']
-
-        counts = merged.groupby(['time_step', cls_col]).size().unstack(fill_value=0)
-        pct    = counts.div(counts.sum(axis=1), axis=0) * 100
-
-        print("= Temporal Class Patterns\t" + "=" * 30)
-        print(counts.head(10))
-
-        fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-
-        counts.plot(ax=axes[0], marker='o', markersize=3)
-        axes[0].set_title('Node count per class over time')
-        axes[0].set_ylabel('Node count')
-        axes[0].legend(title=cls_col)
-
-        pct.plot(ax=axes[1], marker='o', markersize=3)
-        axes[1].set_title('Class fraction over time')
-        axes[1].set_ylabel('Fraction (%)')
-        axes[1].set_xlabel('Time step')
-        axes[1].legend(title=cls_col)
-
-        plt.tight_layout()
-        plt.show()
+        pass
 
 
 ##########################################################
@@ -419,7 +237,7 @@ if __name__ == '__main__':
         'data/raw/elliptic-data-set.zip', graph_structured=True
     )
 
-    inspector = GraphInspector(GraphSummaryStrategy())
+    inspector = GraphInspector(ConnectedComponentsStrategy())
     inspector.run(data)
     # inspector.run_all(data, [
     #     GraphSummaryStrategy(),
